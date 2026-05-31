@@ -1,10 +1,9 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { defineChain } from 'viem'
 
-// Arc Testnet chain definition
 export const arcTestnet = defineChain({
-  id: 1338,  // Update with actual Arc Testnet chain ID from https://docs.arc.io
-  name: 'Arc Testnet',
+  id: 5042002,
+  name: 'Arc Network Testnet',
   nativeCurrency: {
     name: 'USDC',
     symbol: 'USDC',
@@ -12,7 +11,7 @@ export const arcTestnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.testnet.arc.io'], // Update from https://docs.arc.io
+      http: ['https://rpc.testnet.arc.network'],
     },
   },
   blockExplorers: {
