@@ -119,6 +119,7 @@ export function useConfessionBoard() {
         functionName: 'post',
         args: [text],
         value: POST_VALUE,
+        gas: BigInt(200000),
       })
       await publicClient.waitForTransactionReceipt({ hash })
       setTxStatus('success')
@@ -148,6 +149,7 @@ export function useConfessionBoard() {
         functionName: 'upvote',
         args: [BigInt(postId)],
         value: UPVOTE_VALUE,
+        gas: BigInt(200000),
       })
       await publicClient.waitForTransactionReceipt({ hash })
       setTxStatus('success')
