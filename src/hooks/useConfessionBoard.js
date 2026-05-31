@@ -121,7 +121,7 @@ export function useConfessionBoard() {
         abi: CONFESSION_ABI,
         functionName: 'post',
         args: [text],
-        value: parseUnits('0.1', 6),
+        value: BigInt(100000), // 0.10 USDC in 6 decimals
       })
       await publicClient.waitForTransactionReceipt({ hash: postTx })
 
@@ -154,7 +154,7 @@ export function useConfessionBoard() {
         abi: CONFESSION_ABI,
         functionName: 'upvote',
         args: [BigInt(postId)],
-        value: parseUnits('0.05', 6),
+        value: BigInt(50000), // 0.05 USDC in 6 decimals
       })
       await publicClient.waitForTransactionReceipt({ hash: upvoteTx })
 
