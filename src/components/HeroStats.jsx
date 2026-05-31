@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { formatUnits } from 'viem'
 
 function formatUSDC(raw) {
-  try { return Number(formatUnits(raw, 6)).toFixed(2) } catch { return '0.00' }
+  try { return Number(formatUnits(raw, 18)).toFixed(2) } catch { return '0.00' }
 }
 
 function formatCountdown(secs) {
