@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { usePublicClient, useWalletClient, useAccount } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
-import { CONTRACT_ADDRESS, USDC_ADDRESS, CONFESSION_ABI, USDC_ABI } from '../lib/contract'
+import { CONTRACT_ADDRESS, CONFESSION_ABI } from '../lib/contract'
 
 export function useConfessionBoard() {
   const { address } = useAccount()
@@ -13,16 +13,14 @@ export function useConfessionBoard() {
   const [timeLeft, setTimeLeft] = useState(0n)
   const [currentWeek, setCurrentWeek] = useState(0n)
   const [loading, setLoading] = useState(true)
-  const [txStatus, setTxStatus] = useState(null) // null | 'approving' | 'posting' | 'upvoting' | 'success' | 'error'
+  const [txStatus, setTxStatus] = useState(null)
   const [txError, setTxError] = useState(null)
   const [votedPosts, setVotedPosts] = useState(new Set())
 
   const isDeployed = CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000'
 
-  // ─── Fetch contract state ────────────────────────────────────────────────────
   const fetchState = useCallback(async () => {
     if (!publicClient || !isDeployed) {
-      // Use mock data when not deployed yet
       setPool(parseUnits('12.45', 6))
       setTimeLeft(432000n)
       setCurrentWeek(0n)
@@ -61,10 +59,11 @@ export function useConfessionBoard() {
           timestamp: Number(p.timestamp),
           claimed: p.claimed,
         })))
+      } else {
+        setPosts([])
       }
     } catch (e) {
       console.error('Fetch error:', e)
-      // Fall back to mock on error
       setPosts(MOCK_POSTS)
       setPool(parseUnits('12.45', 6))
       setTimeLeft(432000n)
@@ -72,7 +71,6 @@ export function useConfessionBoard() {
     setLoading(false)
   }, [publicClient, isDeployed])
 
-  // ─── Check voted posts for connected wallet ──────────────────────────────────
   const fetchVotedPosts = useCallback(async () => {
     if (!publicClient || !address || !isDeployed || posts.length === 0) return
     try {
@@ -96,11 +94,10 @@ export function useConfessionBoard() {
   useEffect(() => { fetchState() }, [fetchState])
   useEffect(() => { fetchVotedPosts() }, [fetchVotedPosts])
 
-  // ─── Post confession ─────────────────────────────────────────────────────────
+  // ─── Post confession (native USDC via msg.value) ──────────────────────────
   const postConfession = useCallback(async (text) => {
     if (!walletClient || !publicClient) throw new Error('Wallet not connected')
     if (!isDeployed) {
-      // Mock mode — just add locally
       const fake = {
         id: posts.length,
         author: address || '0x0000000000000000000000000000000000000001',
@@ -116,25 +113,15 @@ export function useConfessionBoard() {
     }
 
     try {
-      setTxStatus('approving')
+      setTxStatus('posting')
       setTxError(null)
 
-      // 1. Approve USDC
-      const approveTx = await walletClient.writeContract({
-        address: USDC_ADDRESS,
-        abi: USDC_ABI,
-        functionName: 'approve',
-        args: [CONTRACT_ADDRESS, parseUnits('0.1', 6)],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: approveTx })
-
-      // 2. Post
-      setTxStatus('posting')
       const postTx = await walletClient.writeContract({
         address: CONTRACT_ADDRESS,
         abi: CONFESSION_ABI,
         functionName: 'post',
         args: [text],
+        value: parseUnits('0.1', 6),
       })
       await publicClient.waitForTransactionReceipt({ hash: postTx })
 
@@ -147,7 +134,7 @@ export function useConfessionBoard() {
     }
   }, [walletClient, publicClient, address, posts, currentWeek, isDeployed, fetchState])
 
-  // ─── Upvote ──────────────────────────────────────────────────────────────────
+  // ─── Upvote (native USDC via msg.value) ──────────────────────────────────
   const upvotePost = useCallback(async (postId) => {
     if (votedPosts.has(postId)) return
     if (!isDeployed) {
@@ -159,23 +146,15 @@ export function useConfessionBoard() {
     if (!walletClient || !publicClient) throw new Error('Wallet not connected')
 
     try {
-      setTxStatus('approving')
+      setTxStatus('upvoting')
       setTxError(null)
 
-      const approveTx = await walletClient.writeContract({
-        address: USDC_ADDRESS,
-        abi: USDC_ABI,
-        functionName: 'approve',
-        args: [CONTRACT_ADDRESS, parseUnits('0.05', 6)],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: approveTx })
-
-      setTxStatus('upvoting')
       const upvoteTx = await walletClient.writeContract({
         address: CONTRACT_ADDRESS,
         abi: CONFESSION_ABI,
         functionName: 'upvote',
         args: [BigInt(postId)],
+        value: parseUnits('0.05', 6),
       })
       await publicClient.waitForTransactionReceipt({ hash: upvoteTx })
 
@@ -206,7 +185,6 @@ export function useConfessionBoard() {
   }
 }
 
-// ─── Mock data (used before contract deployed) ────────────────────────────────
 const MOCK_POSTS = [
   { id: 0, author: '0xabc1234567890abc1234567890abc1234567890ab', text: 'I deployed my first smart contract drunk at 3am and it still holds $4k. I check on it like a plant.', week: 0, upvotes: 47, timestamp: Math.floor(Date.now()/1000) - 7200, claimed: false },
   { id: 1, author: '0xdef9876543210def9876543210def9876543210de', text: 'I told my team that feature took 2 weeks of research. I used Claude and it took 40 minutes.', week: 0, upvotes: 38, timestamp: Math.floor(Date.now()/1000) - 18000, claimed: false },
