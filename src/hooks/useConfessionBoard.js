@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { usePublicClient, useWalletClient, useAccount } from 'wagmi'
-import { parseUnits, formatUnits } from 'viem'
+import { parseUnits } from 'viem'
 import { CONTRACT_ADDRESS, CONFESSION_ABI } from '../lib/contract'
 
 export function useConfessionBoard() {
@@ -19,6 +19,9 @@ export function useConfessionBoard() {
 
   const isDeployed = CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000'
 
+  const POST_VALUE   = parseUnits('0.1', 18)
+  const UPVOTE_VALUE = parseUnits('0.05', 18)
+
   const fetchState = useCallback(async () => {
     if (!publicClient || !isDeployed) {
       setPool(parseUnits('12.45', 6))
@@ -28,7 +31,6 @@ export function useConfessionBoard() {
       setLoading(false)
       return
     }
-
     try {
       const [poolRaw, countRaw, weekRaw, timeRaw] = await Promise.all([
         publicClient.readContract({ address: CONTRACT_ADDRESS, abi: CONFESSION_ABI, functionName: 'pool' }),
@@ -36,11 +38,9 @@ export function useConfessionBoard() {
         publicClient.readContract({ address: CONTRACT_ADDRESS, abi: CONFESSION_ABI, functionName: 'currentWeek' }),
         publicClient.readContract({ address: CONTRACT_ADDRESS, abi: CONFESSION_ABI, functionName: 'timeLeft' }),
       ])
-
       setPool(poolRaw)
       setCurrentWeek(weekRaw)
       setTimeLeft(timeRaw)
-
       const count = Number(countRaw)
       if (count > 0) {
         const ids = Array.from({ length: Math.min(count, 50) }, (_, i) => BigInt(i))
@@ -94,13 +94,11 @@ export function useConfessionBoard() {
   useEffect(() => { fetchState() }, [fetchState])
   useEffect(() => { fetchVotedPosts() }, [fetchVotedPosts])
 
-  // ─── Post confession (native USDC via msg.value) ──────────────────────────
   const postConfession = useCallback(async (text) => {
-    if (!walletClient || !publicClient) throw new Error('Wallet not connected')
     if (!isDeployed) {
       const fake = {
         id: posts.length,
-        author: address || '0x0000000000000000000000000000000000000001',
+        author: address || '0x000000000000000000000000000000000000dead',
         text,
         week: Number(currentWeek),
         upvotes: 0,
@@ -111,20 +109,18 @@ export function useConfessionBoard() {
       setPool(p => p + parseUnits('0.1', 6))
       return
     }
-
+    if (!walletClient || !publicClient) throw new Error('Wallet not connected')
     try {
       setTxStatus('posting')
       setTxError(null)
-
-      const postTx = await walletClient.writeContract({
+      const hash = await walletClient.writeContract({
         address: CONTRACT_ADDRESS,
         abi: CONFESSION_ABI,
         functionName: 'post',
         args: [text],
-        value: BigInt(100000), // 0.10 USDC in 6 decimals
+        value: POST_VALUE,
       })
-      await publicClient.waitForTransactionReceipt({ hash: postTx })
-
+      await publicClient.waitForTransactionReceipt({ hash })
       setTxStatus('success')
       await fetchState()
     } catch (e) {
@@ -134,7 +130,6 @@ export function useConfessionBoard() {
     }
   }, [walletClient, publicClient, address, posts, currentWeek, isDeployed, fetchState])
 
-  // ─── Upvote (native USDC via msg.value) ──────────────────────────────────
   const upvotePost = useCallback(async (postId) => {
     if (votedPosts.has(postId)) return
     if (!isDeployed) {
@@ -144,20 +139,17 @@ export function useConfessionBoard() {
       return
     }
     if (!walletClient || !publicClient) throw new Error('Wallet not connected')
-
     try {
       setTxStatus('upvoting')
       setTxError(null)
-
-      const upvoteTx = await walletClient.writeContract({
+      const hash = await walletClient.writeContract({
         address: CONTRACT_ADDRESS,
         abi: CONFESSION_ABI,
         functionName: 'upvote',
         args: [BigInt(postId)],
-        value: BigInt(50000), // 0.05 USDC in 6 decimals
+        value: UPVOTE_VALUE,
       })
-      await publicClient.waitForTransactionReceipt({ hash: upvoteTx })
-
+      await publicClient.waitForTransactionReceipt({ hash })
       setTxStatus('success')
       setVotedPosts(prev => new Set([...prev, postId]))
       await fetchState()
@@ -169,19 +161,10 @@ export function useConfessionBoard() {
   }, [walletClient, publicClient, votedPosts, isDeployed, fetchState])
 
   return {
-    posts,
-    pool,
-    timeLeft,
-    currentWeek,
-    loading,
-    txStatus,
-    txError,
-    votedPosts,
-    postConfession,
-    upvotePost,
-    refresh: fetchState,
-    setTxStatus,
-    isDeployed,
+    posts, pool, timeLeft, currentWeek, loading,
+    txStatus, txError, votedPosts,
+    postConfession, upvotePost,
+    refresh: fetchState, setTxStatus, isDeployed,
   }
 }
 
