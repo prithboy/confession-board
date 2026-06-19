@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { formatUnits } from 'viem'
+import { useWriteContract, usePublicClient } from 'wagmi'
+import { CONTRACT_ADDRESS, CONFESSION_ABI } from '../lib/contract'
 
 function formatUSDC(raw) {
   try { return Number(formatUnits(raw, 18)).toFixed(2) } catch { return '0.00' }
@@ -43,8 +45,12 @@ function StatBox({ label, value, accent }) {
   )
 }
 
-export function HeroStats({ pool, timeLeft, currentWeek, postCount, onConfess }) {
+export function HeroStats({ pool, timeLeft, currentWeek, postCount, onConfess, onRefresh }) {
   const [live, setLive] = useState(timeLeft)
+  const [settling, setSettling] = useState(false)
+  const [settled, setSettled] = useState(false)
+  const publicClient = usePublicClient()
+  const { writeContractAsync } = useWriteContract()
 
   useEffect(() => { setLive(timeLeft) }, [timeLeft])
   useEffect(() => {
@@ -52,9 +58,29 @@ export function HeroStats({ pool, timeLeft, currentWeek, postCount, onConfess })
     return () => clearInterval(t)
   }, [])
 
+  const isOver = Number(live) <= 0
+
+  const handleSettle = async () => {
+    try {
+      setSettling(true)
+      const hash = await writeContractAsync({
+        address: CONTRACT_ADDRESS,
+        abi: CONFESSION_ABI,
+        functionName: 'settle',
+        gas: BigInt(200000),
+      })
+      await publicClient.waitForTransactionReceipt({ hash })
+      setSettled(true)
+      if (onRefresh) onRefresh()
+    } catch (e) {
+      console.error(e)
+      alert('Settle failed: ' + (e.shortMessage || e.message))
+    }
+    setSettling(false)
+  }
+
   return (
     <div style={{ paddingTop: 64, paddingBottom: 48 }}>
-      {/* Title */}
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -73,11 +99,9 @@ export function HeroStats({ pool, timeLeft, currentWeek, postCount, onConfess })
           fontFamily: 'var(--font-serif)',
           fontStyle: 'italic',
           fontSize: 'clamp(40px, 7vw, 64px)',
-          fontWeight: 400,
-          lineHeight: 1.1,
+          fontWeight: 400, lineHeight: 1.1,
           color: 'var(--arc-text)',
-          letterSpacing: '-0.02em',
-          marginBottom: 16,
+          letterSpacing: '-0.02em', marginBottom: 16,
         }}>
           Confess something.<br />
           <span style={{ color: 'var(--arc-muted)', fontStyle: 'normal', fontFamily: 'var(--font-sans)', fontSize: '60%', fontWeight: 300 }}>
@@ -94,41 +118,77 @@ export function HeroStats({ pool, timeLeft, currentWeek, postCount, onConfess })
           The top confession every week wins the entire pool.
         </p>
 
+        {/* Settle banner when week is over */}
+        {isOver && !settled && (
+          <div style={{
+            background: 'rgba(232,184,91,0.08)',
+            border: '1px solid rgba(232,184,91,0.25)',
+            borderRadius: 14, padding: '16px 24px',
+            marginBottom: 24,
+            display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+          }}>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--arc-gold)', marginBottom: 2 }}>
+                🏆 Week #{Number(currentWeek)} is over!
+              </div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--arc-muted)' }}>
+                Anyone can trigger the payout — winner gets all the USDC instantly
+              </div>
+            </div>
+            <button
+              onClick={handleSettle}
+              disabled={settling}
+              style={{
+                background: 'linear-gradient(135deg, var(--arc-gold), #e87b5b)',
+                border: 'none', borderRadius: 10,
+                padding: '10px 22px',
+                color: '#000', fontSize: 13, fontWeight: 700,
+                cursor: settling ? 'default' : 'pointer',
+                opacity: settling ? 0.6 : 1,
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.05em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {settling ? '⏳ Settling...' : '🏆 Settle & Pay Winner'}
+            </button>
+          </div>
+        )}
+
+        {settled && (
+          <div style={{
+            background: 'rgba(91,232,160,0.08)',
+            border: '1px solid rgba(91,232,160,0.2)',
+            borderRadius: 14, padding: '14px 24px',
+            marginBottom: 24,
+            fontSize: 13, fontFamily: 'var(--font-mono)',
+            color: 'var(--arc-green)', textAlign: 'center',
+          }}>
+            ✓ Week settled! Winner has been paid. New week started.
+          </div>
+        )}
+
         <button
           onClick={onConfess}
           style={{
-            background: 'var(--arc-blue)',
-            border: 'none', borderRadius: 12,
-            padding: '12px 28px',
-            color: '#fff', fontSize: 15, fontWeight: 500,
-            letterSpacing: '-0.01em',
+            background: 'var(--arc-blue)', border: 'none', borderRadius: 12,
+            padding: '12px 28px', color: '#fff', fontSize: 15, fontWeight: 500,
+            letterSpacing: '-0.01em', cursor: 'pointer',
             boxShadow: '0 0 0 1px rgba(91,141,238,0.3), 0 8px 24px rgba(91,141,238,0.2)',
             transition: 'all 0.2s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 0 0 1px rgba(91,141,238,0.4), 0 12px 32px rgba(91,141,238,0.3)' }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 0 0 1px rgba(91,141,238,0.3), 0 8px 24px rgba(91,141,238,0.2)' }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)' }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'none' }}
         >
-          Post a confession  →
+          Post a confession →
         </button>
       </div>
 
-      {/* Stats row */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <StatBox
-          label="This week's pool"
-          value={`$${formatUSDC(pool)} USDC`}
-          accent="var(--arc-text)"
-        />
-        <StatBox
-          label="Time remaining"
-          value={formatCountdown(live)}
-          accent="var(--arc-blue)"
-        />
-        <StatBox
-          label="Confessions"
-          value={postCount}
-          accent="var(--arc-muted)"
-        />
+        <StatBox label="This week's pool" value={`$${formatUSDC(pool)} USDC`} accent="var(--arc-text)" />
+        <StatBox label="Time remaining" value={formatCountdown(live)} accent={isOver ? 'var(--arc-gold)' : 'var(--arc-blue)'} />
+        <StatBox label="Confessions" value={postCount} accent="var(--arc-muted)" />
       </div>
     </div>
   )

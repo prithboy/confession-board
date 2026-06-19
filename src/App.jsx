@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useState } from 'react'
 import { useAccount, useChainId, useSwitchChain } from 'wagmi'
 import { useConfessionBoard } from './hooks/useConfessionBoard'
 import { Navbar } from './components/Navbar'
@@ -20,21 +19,16 @@ export default function App() {
 
   const isWrongNetwork = isConnected && chainId !== arcTestnet.id
 
-  const handleConfessClick = () => setShowModal(true)
-
   return (
     <div style={{ position: 'relative', minHeight: '100vh' }}>
       <Background />
-      <Navbar onConfess={handleConfessClick} />
+      <Navbar onConfess={() => setShowModal(true)} />
 
-      {/* Wrong network banner */}
       {isWrongNetwork && (
         <div style={{
           background: 'rgba(232,91,122,0.1)',
           border: '1px solid rgba(232,91,122,0.3)',
-          borderRadius: 0,
-          padding: '10px 24px',
-          textAlign: 'center',
+          padding: '10px 24px', textAlign: 'center',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
         }}>
           <span style={{ fontSize: 13, color: 'var(--arc-red)', fontFamily: 'var(--font-mono)' }}>
@@ -47,9 +41,7 @@ export default function App() {
               padding: '5px 14px', color: '#fff', fontSize: 12,
               fontFamily: 'var(--font-mono)', cursor: 'pointer',
             }}
-          >
-            Switch Network
-          </button>
+          >Switch Network</button>
         </div>
       )}
 
@@ -59,9 +51,9 @@ export default function App() {
           timeLeft={board.timeLeft}
           currentWeek={board.currentWeek}
           postCount={board.posts.length}
-          onConfess={handleConfessClick}
+          onConfess={() => setShowModal(true)}
+          onRefresh={board.refresh}
         />
-
         <ConfessionFeed
           posts={board.posts}
           sortBy={sortBy}
